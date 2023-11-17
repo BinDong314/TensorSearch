@@ -46,6 +46,8 @@ std::string distance_type = "dotproduct";
 bool is_input_single_file = false;
 bool is_shift = false;
 int shift_size = 1;
+bool is_partition_single_file = false;
+int rank_to_partition = 0; // The rank of the data to partition
 // Put all into config file end
 
 void all_gather_vector(const std::vector<float> &v_to_send, std::vector<float> &v_to_receive);
@@ -400,7 +402,7 @@ int main(int argc, char *argv[])
 {
 
     int copt;
-    while ((copt = getopt(argc, argv, "d:q:r:m:s:k:h")) != -1)
+    while ((copt = getopt(argc, argv, "d:q:r:m:s:k:p:h")) != -1)
         switch (copt)
         {
         case 'd':
@@ -424,6 +426,11 @@ int main(int argc, char *argv[])
             user_has_similarity_rank = true;
             user_similarity_rank = atoi(optarg);
             std::cout << "Enable the rank of similarity from user, user_similarity_rank = " << user_similarity_rank << "\n";
+            break;
+        case 'p':
+            is_partition_single_file = true;
+            rank_to_partition = atoi(optarg);
+            std::cout << "Enable the partition of the data on the rank = " << rank_to_partition << "\n";
             break;
         case 'h':
             printf_help(argv[0]);
@@ -511,6 +518,10 @@ int main(int argc, char *argv[])
         for (int iii = 0; iii < array_size.size(); iii++)
         {
             chunk_size[iii] = array_size[iii];
+            if (is_partition_single_file && rank_to_partition == iii)
+            {
+                chunk_size[iii] = array_size[iii] / ft_size;
+            }
         }
     }
 
