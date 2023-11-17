@@ -12,6 +12,8 @@
 #include <vector>
 #include <stdlib.h>
 #include "ft.h"
+#include <filesystem>
+
 #include "tensor-search-help.h"
 
 using namespace std;
