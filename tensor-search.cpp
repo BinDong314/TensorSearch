@@ -106,17 +106,22 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             {
                 final_shift_size = shift_size;
             }
-            int data_n_rows = data_size[0];
+            size_t data_n_rows = data_size[0];
             // int n_pairs_of_vector = data_n_rows;
             std::cout << "data.size() = " << data.size() << "\n";
             std::cout << "data_n_rows = " << data_n_rows << "\n";
             std::cout << "final_shift_size = " << final_shift_size << "\n";
             // std::cout << "n_pairs_of_vector = " << data_n_rows << "\n";
             // std::size_t data_start_offset = 0;
-            for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
-            {
-                similarity_result[pattern_index].resize(data_n_rows);
-            }
+            // for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+            // {
+            //     similarity_result[pattern_index].resize(data_n_rows, 0);
+            // }
+            similarity_result.clear();
+            similarity_result.resize(n_patterns, std::vector<float>(data_n_rows, 0.0));
+
+            // similarity_vectors.push_back(std::vector<float>(data_n_rows, 0.0));
+
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
                 if ((pattern_index % 10 == 0))
@@ -125,7 +130,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 #if defined(_OPENMP)
 #pragma omp parallel for
 #endif
-                for (int shift_index = 0; shift_index < data_n_rows; shift_index++)
+                for (size_t shift_index = 0; shift_index < data_n_rows; shift_index++)
                 {
                     similarity_result[pattern_index][shift_index] = similarity_fun(data, pattern_data[pattern_index], distance_type, shift_index * final_shift_size, final_shift_size);
                     // similarity_fun(data, pattern_data[pattern_index], distance_type, shift_index * final_shift_size, final_shift_size);
