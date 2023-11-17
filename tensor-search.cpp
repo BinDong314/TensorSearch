@@ -116,6 +116,9 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
                 similarity_result[pattern_index].resize(data_n_rows);
+            }
+            for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+            {
                 if ((pattern_index % 10 == 0))
                     std::cout << "pattern_index = " << pattern_index << "\n";
 // data_start_offset = 0;
