@@ -115,7 +115,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             // std::size_t data_start_offset = 0;
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
-                // similarity_result[pattern_index].resize(data_n_rows);
+                similarity_result[pattern_index].resize(data_n_rows);
                 if ((pattern_index % 10 == 0))
                     std::cout << "pattern_index = " << pattern_index << "\n";
 // data_start_offset = 0;
@@ -124,9 +124,9 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 #endif
                 for (int shift_index = 0; shift_index < data_n_rows; shift_index++)
                 {
-                    // similarity_result[pattern_index][shift_index] = similarity_fun(data, pattern_data[pattern_index], distance_type, data_start_offset, final_shift_size);
-                    similarity_fun(data, pattern_data[pattern_index], distance_type, shift_index * final_shift_size, final_shift_size);
-                    // data_start_offset = data_start_offset + final_shift_size;
+                    similarity_result[pattern_index][shift_index] = similarity_fun(data, pattern_data[pattern_index], distance_type, data_start_offset, final_shift_size);
+                    // similarity_fun(data, pattern_data[pattern_index], distance_type, shift_index * final_shift_size, final_shift_size);
+                    //  data_start_offset = data_start_offset + final_shift_size;
                 }
             }
         }
