@@ -113,10 +113,10 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             std::cout << "final_shift_size = " << final_shift_size << "\n";
             // std::cout << "n_pairs_of_vector = " << data_n_rows << "\n";
             // std::size_t data_start_offset = 0;
-            // for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
-            // {
-            //     similarity_result[pattern_index].resize(data_n_rows, 0);
-            // }
+            for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+            {
+                similarity_result[pattern_index].clear();
+            }
             similarity_result.clear();
             similarity_result.resize(n_patterns, std::vector<float>(data_n_rows, 0.0));
 
