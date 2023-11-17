@@ -5,7 +5,7 @@ HDF5_DIR=/Users/dbin/work/soft/hdf5-git-dev/build
 #DASH_DIR=/Users/dbin/work/soft/dash/build/install
 
 CCC=mpicxx
-OTHER_FLAGS=-g3  -std=c++17 -I./DasLib/
+OTHER_FLAGS=-O3  -std=c++17 -I./DasLib/
 
 AU_FLAG=-I$(AU_DIR)/include -L$(AU_DIR)/lib -lFastensor
 HDF5_FLAG=-I$(HDF5_DIR)/include -L$(HDF5_DIR)/lib -lhdf5  -lhdf5_hl -lz

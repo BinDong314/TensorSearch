@@ -60,6 +60,18 @@
         "random": "cpp",
         "utility": "cpp",
         "cinttypes": "cpp",
-        "deque": "cpp"
+        "deque": "cpp",
+        "filesystem": "cpp",
+        "__hash_table": "cpp",
+        "__tree": "cpp",
+        "array": "cpp",
+        "map": "cpp",
+        "queue": "cpp",
+        "set": "cpp",
+        "span": "cpp",
+        "stack": "cpp",
+        "unordered_map": "cpp",
+        "format": "cpp",
+        "cassert": "cpp"
     }
 }

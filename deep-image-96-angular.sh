@@ -1,0 +1,1 @@
+./tensor-search -d ./compare/deep-image-96-angular.hdf5:/train  -q ./compare/deep-image-96-angular.hdf5:/test -r ./compare/deep-image-96-angular-ts-result.hdf5:/similarity -k 1  -s -1
