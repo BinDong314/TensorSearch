@@ -1,3 +1,30 @@
+
+template <class T>
+std::vector<std::vector<T>> Reshape2DVector(const std::vector<std::vector<T>> &nums, int m, int n)
+{
+    // Get the number of rows and columns in the original matrix
+    int originalRows = nums.size();
+    int originalCols = (originalRows > 0) ? nums[0].size() : 0;
+
+    // Check if reshape is possible
+    if (originalRows * originalCols != m * n)
+    {
+        std::cout << "Reshape is not possible.\n";
+        return nums; // Return the original matrix if reshape is not possible
+    }
+
+    // Create the reshaped matrix with dimensions m x n
+    std::vector<std::vector<T>> reshaped(m, std::vector<T>(n, T()));
+
+    // Populate the reshaped matrix with elements from the original matrix using row-major order
+    for (int i = 0; i < m * n; ++i)
+    {
+        reshaped[i / n][i % n] = nums[i / originalCols][i % originalCols];
+    }
+
+    return reshaped;
+}
+
 template <class T>
 inline std::vector<std::vector<T>> ConvertVector1DTo2D(const std::vector<T> &data1d, const size_t rows, const size_t cols, const bool row_layout_flag)
 {

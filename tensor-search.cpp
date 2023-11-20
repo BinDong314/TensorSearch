@@ -237,6 +237,7 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
         PrintVector("max_offset_upper = ", max_offset_upper);
     std::vector<int> start_offset;
     start_offset.resize(max_offset_upper.size(), 0);
+    std::cout << "Get the data for UDF" << std::endl;
 
     std::vector<TT> db_data_per_udf;
     iStencil.ReadNeighbors(start_offset, max_offset_upper, db_data_per_udf);
@@ -308,8 +309,13 @@ void load_process_pattern_files_on_each_process()
         for (int iii = 0; iii < array_size.size(); iii++)
         {
             pattern_chunk_size[iii] = array_size[iii];
+            if (is_partition_single_file && rank_to_partition == iii)
+            {
+                pattern_chunk_size[iii] = array_size[iii] / ft_size;
+            }
         }
     }
+
     // assert(pattern_chunk_size.size() == data_rank);
     pattern_overlap_size.resize(pattern_chunk_size.size(), 0);
     pattern_arrays->SetChunkSize(pattern_chunk_size);
@@ -323,15 +329,17 @@ void load_process_pattern_files_on_each_process()
     }
 
     int n_patterns_on_my_rank = 0;
+
     if (ft_size > 1)
     {
         pattern_arrays->SetChunkSchedulingMethod(CHUNK_SCHEDULING_CR);
         unsigned long long my_chunk_start, my_chunk_end;
         pattern_arrays->GetMyChunkStartEnd(my_chunk_start, my_chunk_end);
-        if (!ft_rank)
-            std::cout << "rank [" << ft_rank << "]: my_chunk_start = " << my_chunk_start << ", my_chunk_end = " << my_chunk_end << "\n";
+        // if (!ft_rank)
+        std::cout << "rank [" << ft_rank << "]: my_chunk_start = " << my_chunk_start << ", my_chunk_end = " << my_chunk_end << "\n";
         n_patterns_on_my_rank = my_chunk_end - my_chunk_start;
     }
+
     if (!is_pattern_input_single_file)
     {
 
@@ -340,10 +348,11 @@ void load_process_pattern_files_on_each_process()
     }
     else
     {
-        n_patterns = 1;
+        n_patterns = ft_size;
     }
 
     int n_patterns_to_go;
+
     if (ft_size > 1)
     {
         n_patterns_to_go = n_patterns_on_my_rank;
@@ -365,6 +374,7 @@ void load_process_pattern_files_on_each_process()
 
         pattern_data[pattern_file_index] = pattern_data_per_file;
     }
+    // std::cout << "Get the data for pattern" << std::endl;
 
     if (ft_size > 1)
     {
@@ -381,20 +391,41 @@ void load_process_pattern_files_on_each_process()
         std::vector<float> pattern_data_1D_merged;
         all_gather_vector(pattern_data_1D, pattern_data_1D_merged);
         pattern_data = ConvertVector1DTo2D(pattern_data_1D_merged, n_patterns, max_points_per_pattern, true);
+
+        // std::cout << "n_patterns = " << n_patterns << std::endl;
+        // std::cout << "max_points_per_pattern = " << max_points_per_pattern << std::endl;
+        // std::cout << "After exchange: pattern_data.size() = " << pattern_data.size() << std::endl;
+        // std::cout << "After exchange: pattern_data[0].size() = " << pattern_data[0].size() << std::endl;
     }
 
     // Special case, when user's data is stored as 2d but the similary happens on 1d
-    if (ft_size == 1 && user_has_similarity_rank && pattern_chunk_size.size() == 2 && user_similarity_rank == 1)
+    if (user_has_similarity_rank && pattern_chunk_size.size() == 2 && user_similarity_rank == 1)
     {
-        n_patterns = pattern_chunk_size[0];
-        int max_points_per_pattern = pattern_chunk_size[1];
-        pattern_data = ConvertVector1DTo2D(pattern_data_per_file, n_patterns, max_points_per_pattern, true);
-        each_pattern_size.resize(1);
-        each_pattern_size[0] = pattern_chunk_size[1];
-        // user_similarity_rank = data_rank;
+        if (ft_size == 1)
+        {
+            n_patterns = pattern_chunk_size[0];
+            int max_points_per_pattern = pattern_chunk_size[1];
+            pattern_data = ConvertVector1DTo2D(pattern_data_per_file, n_patterns, max_points_per_pattern, true);
+            each_pattern_size.resize(1);
+            each_pattern_size[0] = pattern_chunk_size[1];
+            // user_similarity_rank = data_rank;
 
-        std::cout << "n_patterns = " << n_patterns << std::endl;
-        std::cout << "each_pattern_size = " << each_pattern_size[0] << std::endl;
+            std::cout << "n_patterns = " << n_patterns << std::endl;
+            std::cout << "each_pattern_size = " << each_pattern_size[0] << std::endl;
+        }
+        else
+        {
+            n_patterns = pattern_chunk_size[0] * ft_size;
+            int max_points_per_pattern = pattern_chunk_size[1];
+            // ConcatenateVectors();
+            pattern_data = Reshape2DVector(pattern_data, n_patterns, max_points_per_pattern);
+            if (!ft_rank)
+            {
+                std::cout << "After Reshape2DVector: pattern_data.size() = " << pattern_data.size() << std::endl;
+                std::cout << "After Reshape2DVector: pattern_data[0].size() = " << pattern_data[0].size() << std::endl;
+                PrintVV("pattern_data=", pattern_data);
+            }
+        }
     }
 }
 
@@ -489,6 +520,10 @@ int main(int argc, char *argv[])
         A->SkipFileTail();
         A->ExecuteUDFOnce();
         A->ControlEndpoint(DIR_SKIP_SIZE_CHECK, null_str);
+    }
+    else
+    {
+        A->EnableCollectiveIO();
     }
 
     std::vector<int> chunk_size;
