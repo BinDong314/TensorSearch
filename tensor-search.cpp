@@ -521,10 +521,10 @@ int main(int argc, char *argv[])
         A->ExecuteUDFOnce();
         A->ControlEndpoint(DIR_SKIP_SIZE_CHECK, null_str);
     }
-    else
-    {
-        A->EnableCollectiveIO();
-    }
+    // else
+    // {
+    //     A->EnableCollectiveIO();
+    // }
 
     std::vector<int> chunk_size;
     std::vector<int> overlap_size;
