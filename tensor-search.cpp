@@ -83,6 +83,9 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
     // std::vector<float> similarity_result_of_each_pattern;
     // similarity_result_of_each_pattern.resize(1, 0);
 
+    std::cout << "Start to calculate_similarity " << std::endl
+              << std::flush;
+
     if (final_similarity_rank == 1)
     {
         // std::vector<float> data_1d = data;
@@ -99,6 +102,9 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
         }
         else
         {
+            std::cout << "Start to calculate_similarity 1D with shift " << std::endl
+                      << std::flush;
+
             size_t final_shift_size;
             if (shift_size == -1)
             {
@@ -127,7 +133,8 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
                 if ((pattern_index % 10 == 0))
-                    std::cout << "pattern_index = " << pattern_index << "\n";
+                    std::cout << "pattern_index = " << pattern_index << "\n"
+                              << std::endl;
 // data_start_offset = 0;
 #if defined(_OPENMP)
 #pragma omp parallel for
