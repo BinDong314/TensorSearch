@@ -116,9 +116,15 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             }
             size_t data_n_rows = data_size[0];
             // int n_pairs_of_vector = data_n_rows;
-            std::cout << "data.size() = " << data.size() << "\n";
-            std::cout << "data_n_rows = " << data_n_rows << "\n";
-            std::cout << "final_shift_size = " << final_shift_size << "\n";
+            std::cout << "data.size() = " << data.size() << std::endl
+                      << std::flush;
+
+            std::cout << "data_n_rows = " << data_n_rows << std::endl
+                      << std::flush;
+            std::cout << "final_shift_size = " << final_shift_size << std::endl
+                      << std::flush;
+            ;
+
             // std::cout << "n_pairs_of_vector = " << data_n_rows << "\n";
             // std::size_t data_start_offset = 0;
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
@@ -134,7 +140,8 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             {
                 if ((pattern_index % 10 == 0))
                     std::cout << "pattern_index = " << pattern_index << "\n"
-                              << std::endl;
+                              << std::endl
+                              << std::flush;
 // data_start_offset = 0;
 #if defined(_OPENMP)
 #pragma omp parallel for
