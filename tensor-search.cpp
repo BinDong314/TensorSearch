@@ -237,10 +237,10 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
         PrintVector("max_offset_upper = ", max_offset_upper);
     std::vector<int> start_offset;
     start_offset.resize(max_offset_upper.size(), 0);
-    std::cout << "Get the data for UDF" << std::endl;
 
     std::vector<TT> db_data_per_udf;
     iStencil.ReadNeighbors(start_offset, max_offset_upper, db_data_per_udf);
+    std::cout << "Get the data for UDF on rank " << ft_rank << std::endl;
 
     // std::vector<std::vector<float>> ts2d;
     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
