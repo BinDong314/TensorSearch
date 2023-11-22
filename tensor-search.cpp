@@ -14,6 +14,13 @@
 #include "ft.h"
 #include <filesystem>
 
+struct SimilarityStruct
+{
+    AU_UDT_INIT(SimilarityStruct)
+    float similarity;
+    unsigned long long index;
+};
+
 #include "tensor-search-help.h"
 
 using namespace std;
