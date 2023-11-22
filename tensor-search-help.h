@@ -59,6 +59,28 @@ inline std::vector<std::vector<T>> ConvertVector1DTo2D(const std::vector<T> &dat
     return result;
 }
 
+/**
+ * @brief Convert a N x M matrix src to M x N matrix dst
+ *
+ * @tparam T
+ * @param src
+ * @param dst
+ * @param N : row
+ * @param M : column
+ */
+
+template <class T>
+inline void transpose(T *src, T *dst, const int N, const int M)
+{
+    int i, j;
+    for (int n = 0; n < N * M; n++)
+    {
+        i = n / N;
+        j = n % N;
+        dst[n] = src[M * j + i];
+    }
+}
+
 template <class T>
 inline std::vector<T> ConvertVector2DTo1D(std::vector<std::vector<T>> &data2d)
 {

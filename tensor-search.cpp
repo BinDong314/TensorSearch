@@ -83,8 +83,11 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
     // std::vector<float> similarity_result_of_each_pattern;
     // similarity_result_of_each_pattern.resize(1, 0);
 
-    std::cout << "Start to calculate_similarity " << std::endl
-              << std::flush;
+    if (ft_rank == 0 || ft_rank == (ft_size - 1))
+    {
+        std::cout << "Start to calculate_similarity " << std::endl
+                  << std::flush;
+    }
 
     if (final_similarity_rank == 1)
     {
@@ -102,9 +105,11 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
         }
         else
         {
-            std::cout << "Start to calculate_similarity 1D with shift " << std::endl
-                      << std::flush;
-
+            if (ft_rank == 0 || ft_rank == (ft_size - 1))
+            {
+                std::cout << "Start to calculate_similarity 1D with shift " << std::endl
+                          << std::flush;
+            }
             size_t final_shift_size;
             if (shift_size == -1)
             {
@@ -116,14 +121,16 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
             }
             size_t data_n_rows = data_size[0];
             // int n_pairs_of_vector = data_n_rows;
-            std::cout << "data.size() = " << data.size() << std::endl
-                      << std::flush;
 
-            std::cout << "data_n_rows = " << data_n_rows << std::endl
-                      << std::flush;
-            std::cout << "final_shift_size = " << final_shift_size << std::endl
-                      << std::flush;
-            ;
+            if (!ft_rank)
+            {
+                std::cout << "data.size() = " << data.size() << std::endl
+                          << std::flush;
+                std::cout << "data_n_rows = " << data_n_rows << std::endl
+                          << std::flush;
+                std::cout << "final_shift_size = " << final_shift_size << std::endl
+                          << std::flush;
+            }
 
             // std::cout << "n_pairs_of_vector = " << data_n_rows << "\n";
             // std::size_t data_start_offset = 0;
@@ -138,7 +145,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
-                if ((pattern_index % 10 == 0))
+                if ((pattern_index % 10 == 0) && (ft_rank == 0))
                     std::cout << "pattern_index = " << pattern_index << "\n"
                               << std::endl
                               << std::flush;
@@ -254,7 +261,8 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
 
     std::vector<TT> db_data_per_udf;
     iStencil.ReadNeighbors(start_offset, max_offset_upper, db_data_per_udf);
-    std::cout << "Get the data for UDF on rank " << ft_rank << std::endl;
+    if (ft_rank == 0 || ft_rank == (ft_size - 1))
+        std::cout << "Get the data for UDF on rank " << ft_rank << std::endl;
 
     // std::vector<std::vector<float>> ts2d;
     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
@@ -277,11 +285,23 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
     // calculate_similarity(std::vector<T1> &data, std::vector<int> &data_size, std::vector<std::vector<T2>> &pattern_data, std::vector<int> &each_pattern_data_size, int n_patterns, std::vector<std::vector<float>> &similarity_result)
     calculate_similarity(db_data_per_udf, db_data_per_udf_size, pattern_data, each_pattern_size, n_patterns, similarity_vectors);
 
-    vector_shape[0] = n_patterns;
-    vector_shape[1] = similarity_vectors[0].size();
+    // vector_shape[0] = n_patterns;
+    // vector_shape[1] = similarity_vectors[0].size();
 
     std::vector<float> similarity_vector_1d = ConvertVector2DTo1D(similarity_vectors);
 
+    std::vector<float> ts_temp_column;
+    ts_temp_column.resize(similarity_vector_1d.size());
+    transpose(similarity_vector_1d.data(), ts_temp_column.data(), similarity_vectors.size(), similarity_vectors[0].size());
+    similarity_vector_1d = ts_temp_column;
+    vector_shape[1] = similarity_vectors.size();
+    vector_shape[0] = similarity_vectors[0].size();
+
+    if (ft_rank == 0 || ft_rank == (ft_size - 1))
+    {
+        PrintVector("Output vector_shape = ", vector_shape);
+        PrintVV("similarity_vectors = ", similarity_vectors);
+    }
     oStencil.SetShape(vector_shape);
     oStencil = similarity_vector_1d;
     return oStencil;
@@ -312,7 +332,8 @@ void load_process_pattern_files_on_each_process()
     {
         pattern_arrays->ControlEndpoint(DIR_SKIP_SIZE_CHECK, null_str);
         pattern_arrays->ControlEndpoint(DIR_GET_FILE_SIZE, file_size_str_h5);
-        std::cout << "file_size_str_h5 = " << file_size_str_h5[0] << "\n";
+        if (!ft_rank)
+            std::cout << "file_size_str_h5 = " << file_size_str_h5[0] << "\n";
         String2Vector(file_size_str_h5[0], pattern_chunk_size);
     }
     else
@@ -349,9 +370,9 @@ void load_process_pattern_files_on_each_process()
         pattern_arrays->SetChunkSchedulingMethod(CHUNK_SCHEDULING_CR);
         unsigned long long my_chunk_start, my_chunk_end;
         pattern_arrays->GetMyChunkStartEnd(my_chunk_start, my_chunk_end);
-        // if (!ft_rank)
-        std::cout << "rank [" << ft_rank << "]: my_chunk_start = " << my_chunk_start << ", my_chunk_end = " << my_chunk_end << "\n";
         n_patterns_on_my_rank = my_chunk_end - my_chunk_start;
+        if (!ft_rank)
+            std::cout << "rank [" << ft_rank << "]: my_chunk_start = " << my_chunk_start << ", my_chunk_end = " << my_chunk_end << "\n";
     }
 
     if (!is_pattern_input_single_file)
@@ -423,9 +444,11 @@ void load_process_pattern_files_on_each_process()
             each_pattern_size.resize(1);
             each_pattern_size[0] = pattern_chunk_size[1];
             // user_similarity_rank = data_rank;
-
-            std::cout << "n_patterns = " << n_patterns << std::endl;
-            std::cout << "each_pattern_size = " << each_pattern_size[0] << std::endl;
+            if (!ft_rank)
+            {
+                std::cout << "n_patterns = " << n_patterns << std::endl;
+                std::cout << "each_pattern_size = " << each_pattern_size[0] << std::endl;
+            }
         }
         else
         {
@@ -465,24 +488,31 @@ int main(int argc, char *argv[])
         case 's':
             is_shift = true;
             shift_size = atoi(optarg);
-            std::cout << "Enable shift with shift_size = " << shift_size << "\n";
+            if (!ft_rank)
+                std::cout << "Enable shift with shift_size = " << shift_size << "\n";
             break;
         case 'k':
             user_has_similarity_rank = true;
             user_similarity_rank = atoi(optarg);
-            std::cout << "Enable the rank of similarity from user, user_similarity_rank = " << user_similarity_rank << "\n";
+            if (!ft_rank)
+                std::cout << "Enable the rank of similarity from user, user_similarity_rank = " << user_similarity_rank << "\n";
             break;
         case 'p':
             is_partition_single_file = true;
             rank_to_partition = atoi(optarg);
-            std::cout << "Enable the partition of the data on the rank = " << rank_to_partition << "\n";
+            if (!ft_rank)
+                std::cout << "Enable the partition of the data on the rank = " << rank_to_partition << "\n";
             break;
         case 'h':
-            printf_help(argv[0]);
+            if (!ft_rank)
+                printf_help(argv[0]);
             exit(0);
         default:
-            printf("Wrong option [%c] for %s \n", copt, argv[0]);
-            printf_help(argv[0]);
+            if (!ft_rank)
+            {
+                printf("Wrong option [%c] for %s \n", copt, argv[0]);
+                printf_help(argv[0]);
+            }
             exit(-1);
             break;
         }
