@@ -14,13 +14,6 @@
 #include "ft.h"
 #include <filesystem>
 
-struct SimilarityStruct
-{
-    AU_UDT_INIT(SimilarityStruct)
-    float similarity;
-    unsigned long long index;
-};
-
 #include "tensor-search-help.h"
 
 using namespace std;
@@ -55,6 +48,8 @@ bool is_shift = false;
 int shift_size = 1;
 bool is_partition_single_file = false;
 int rank_to_partition = 0; // The rank of the data to partition
+size_t top_k = 0;
+
 // Put all into config file end
 
 void all_gather_vector(const std::vector<float> &v_to_send, std::vector<float> &v_to_receive);
@@ -256,7 +251,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 }
 
 template <class TT>
-inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil)
+inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT> &iStencil)
 {
     std::vector<int> max_offset_upper, db_data_per_udf_size; // Size of input data for the whole chunk, zero based
     iStencil.GetOffsetUpper(max_offset_upper);
@@ -274,7 +269,6 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
     // std::vector<std::vector<float>> ts2d;
     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
 
-    Stencil<std::vector<float>> oStencil;
     std::vector<std::vector<float>> similarity_vectors;
     std::vector<size_t> vector_shape(2);
 
@@ -295,24 +289,115 @@ inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil
     // vector_shape[0] = n_patterns;
     // vector_shape[1] = similarity_vectors[0].size();
 
-    std::vector<float> similarity_vector_1d = ConvertVector2DTo1D(similarity_vectors);
+    std::vector<unsigned long long> my_coor = iStencil.GetGlobalCoordinate();
+    unsigned long long my_index_start = my_coor[0];
+    // std::cout << "my_index_start = " << my_index_start << "\n";
+    std::vector<SimilarityStruct> similarity_vector_1d = ConvertVector2DTo1DTopK(similarity_vectors, top_k, my_index_start);
 
-    std::vector<float> ts_temp_column;
-    ts_temp_column.resize(similarity_vector_1d.size());
-    transpose(similarity_vector_1d.data(), ts_temp_column.data(), similarity_vectors.size(), similarity_vectors[0].size());
-    similarity_vector_1d = ts_temp_column;
     vector_shape[1] = similarity_vectors.size();
-    vector_shape[0] = similarity_vectors[0].size();
+
+    if (top_k == 0)
+    {
+        vector_shape[0] = similarity_vectors[0].size();
+    }
+    else
+    {
+        // if (ft_rank == 0)
+        //     PrintSSV("similarity_vector_1d =", similarity_vector_1d);
+
+        std::vector<SimilarityStruct> similarity_vector_1d_collected = CollectSimilarityStructToRoot(similarity_vector_1d);
+        if (ft_rank == 0)
+        {
+            // std::cout << "similarity_vector_1d_collected.size = " << similarity_vector_1d_collected.size() << "\n";
+            // PrintSSV("similarity_vector_1d_collected =", similarity_vector_1d_collected);
+            similarity_vector_1d = FindTopKAfterCollect(similarity_vector_1d_collected, top_k, vector_shape[1]);
+            vector_shape[0] = top_k;
+        }
+        else
+        {
+            vector_shape[1] = 0;
+            vector_shape[0] = 0;
+        }
+    }
+
+    if (vector_shape[1] != 0 && vector_shape[0] != 0)
+    {
+        std::vector<SimilarityStruct> ts_temp_column;
+        ts_temp_column.resize(similarity_vector_1d.size());
+        transpose(similarity_vector_1d.data(), ts_temp_column.data(), vector_shape[1], vector_shape[0]);
+        similarity_vector_1d = ts_temp_column;
+    }
 
     if (ft_rank == 0 || ft_rank == (ft_size - 1))
     {
         PrintVector("Output vector_shape = ", vector_shape);
-        PrintVV("similarity_vectors = ", similarity_vectors);
+        // PrintVV("similarity_vectors = ", similarity_vectors);
+        // PrintSSV("similarity_vector_1d =", similarity_vector_1d);
     }
+    Stencil<std::vector<SimilarityStruct>> oStencil;
     oStencil.SetShape(vector_shape);
     oStencil = similarity_vector_1d;
     return oStencil;
 }
+
+// template <class TT>
+// inline Stencil<std::vector<float>> tensor_search_udf(const Stencil<TT> &iStencil)
+// {
+//     std::vector<int> max_offset_upper, db_data_per_udf_size; // Size of input data for the whole chunk, zero based
+//     iStencil.GetOffsetUpper(max_offset_upper);
+
+//     if (ft_rank == 0 || ft_rank == (ft_size - 1))
+//         PrintVector("max_offset_upper = ", max_offset_upper);
+//     std::vector<int> start_offset;
+//     start_offset.resize(max_offset_upper.size(), 0);
+
+//     std::vector<TT> db_data_per_udf;
+//     iStencil.ReadNeighbors(start_offset, max_offset_upper, db_data_per_udf);
+//     if (ft_rank == 0 || ft_rank == (ft_size - 1))
+//         std::cout << "Get the data for UDF on rank " << ft_rank << std::endl;
+
+//     // std::vector<std::vector<float>> ts2d;
+//     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
+
+//     Stencil<std::vector<float>> oStencil;
+//     std::vector<std::vector<float>> similarity_vectors;
+//     std::vector<size_t> vector_shape(2);
+
+//     similarity_vectors.resize(n_patterns);
+//     db_data_per_udf_size.resize(data_rank);
+//     for (int i = 0; i < data_rank; i++)
+//     {
+//         db_data_per_udf_size[i] = max_offset_upper[i] + 1;
+//     }
+//     // for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+//     // {
+//     //     similarity_vectors[pattern_index] = calculate_similarity(db_data_per_udf, db_data_per_udf_size, pattern_data[pattern_index], pattern_size);
+//     // }
+
+//     // calculate_similarity(std::vector<T1> &data, std::vector<int> &data_size, std::vector<std::vector<T2>> &pattern_data, std::vector<int> &each_pattern_data_size, int n_patterns, std::vector<std::vector<float>> &similarity_result)
+//     calculate_similarity(db_data_per_udf, db_data_per_udf_size, pattern_data, each_pattern_size, n_patterns, similarity_vectors);
+
+//     // vector_shape[0] = n_patterns;
+//     // vector_shape[1] = similarity_vectors[0].size();
+
+//     std::vector<float> similarity_vector_1d = ConvertVector2DTo1D(similarity_vectors);
+
+//     std::vector<float> ts_temp_column;
+//     ts_temp_column.resize(similarity_vector_1d.size());
+//     transpose(similarity_vector_1d.data(), ts_temp_column.data(), similarity_vectors.size(), similarity_vectors[0].size());
+//     similarity_vector_1d = ts_temp_column;
+//     vector_shape[1] = similarity_vectors.size();
+//     vector_shape[0] = similarity_vectors[0].size();
+
+//     if (ft_rank == 0 || ft_rank == (ft_size - 1))
+//     {
+//         PrintVector("Output vector_shape = ", vector_shape);
+//         PrintVV("similarity_vectors = ", similarity_vectors);
+//     }
+//     oStencil.SetShape(vector_shape);
+//     oStencil = similarity_vector_1d;
+//     return oStencil;
+// }
 
 void load_process_pattern_files_on_each_process()
 {
@@ -477,38 +562,52 @@ int main(int argc, char *argv[])
 {
 
     int copt;
-    while ((copt = getopt(argc, argv, "d:q:r:m:s:k:p:h")) != -1)
+    while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:h")) != -1)
         switch (copt)
         {
         case 'd':
             db_data_dir.assign(optarg);
+            if (!ft_rank)
+                std::cout << "Database: " << db_data_dir << "\n";
             break;
         case 'q':
             pattern_dir.assign(optarg);
+            if (!ft_rank)
+                std::cout << "Pattern: " << pattern_dir << "\n";
             break;
-        case 'r':
+        case 'o':
             output_file_dir.assign(optarg);
+            if (!ft_rank)
+                std::cout << "Output: " << output_file_dir << "\n";
             break;
         case 'm':
             distance_type.assign(optarg);
+            if (!ft_rank)
+                std::cout << "Distance:: " << distance_type << "\n";
+            break;
+        case 'k':
+            top_k = atoi(optarg);
+            if (!ft_rank)
+                std::cout << "top_k: " << top_k << "\n";
+            assert(top_k >= 0);
             break;
         case 's':
             is_shift = true;
             shift_size = atoi(optarg);
             if (!ft_rank)
-                std::cout << "Enable shift with shift_size = " << shift_size << "\n";
+                std::cout << "Shift Size = " << shift_size << "\n";
             break;
-        case 'k':
+        case 'r':
             user_has_similarity_rank = true;
             user_similarity_rank = atoi(optarg);
             if (!ft_rank)
-                std::cout << "Enable the rank of similarity from user, user_similarity_rank = " << user_similarity_rank << "\n";
+                std::cout << "User want Similarity on the dimension [ " << user_similarity_rank << " ]\n";
             break;
         case 'p':
             is_partition_single_file = true;
             rank_to_partition = atoi(optarg);
             if (!ft_rank)
-                std::cout << "Enable the partition of the data on the rank = " << rank_to_partition << "\n";
+                std::cout << "User wants Partition on the dimension [ " << rank_to_partition << " ]\n";
             break;
         case 'h':
             if (!ft_rank)
@@ -566,10 +665,11 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+    A->ExecuteUDFOnce();
+
     if (!is_input_single_file)
     {
         A->SkipFileTail();
-        A->ExecuteUDFOnce();
         A->ControlEndpoint(DIR_SKIP_SIZE_CHECK, null_str);
     }
     // else
@@ -620,22 +720,36 @@ int main(int argc, char *argv[])
     A->SetChunkSize(chunk_size);
     A->SetOverlapSize(overlap_size);
 
+    if (top_k != 0)
+    {
+        A->EnableWriteRootOnly();
+    }
+
     if (!ft_rank)
     {
         PrintVector("chunk_size = ", chunk_size);
         PrintVector("overlap_size = ", overlap_size);
     }
 
-    AU::Array<float> *B;
+    AU::Array<SimilarityStruct> *B = new AU::Array<SimilarityStruct>();
     if (is_input_single_file)
     {
         // Store into a single file when the input file is a single file
-        B = new AU::Array<float>(db_data_file_type + ":" + output_file_dir);
+        // B = new AU::Array<SimilarityStruct>(db_data_file_type + ":" + output_file_dir);
+
+        B->PushBackAttribute<float>(db_data_file_type + ":" + output_file_dir + ":" + "/similarity");
+        B->PushBackAttribute<unsigned long long>(db_data_file_type + ":" + output_file_dir + ":" + "/index");
+        B->DisableMPIIO();
+        B->DisableCollectiveIO();
     }
     else
     {
-        B = new AU::Array<float>("EP_DIR:" + db_data_file_type + ":" + output_file_dir);
-        // Use the below rgx pattern to name the file
+        // B = new AU::Array<SimilarityStruct>("EP_DIR:" + db_data_file_type + ":" + output_file_dir);
+
+        B->PushBackAttribute<float>("EP_DIR:" + db_data_file_type + ":" + output_file_dir + ":" + "/similarity");
+        B->PushBackAttribute<unsigned long long>("EP_DIR:" + db_data_file_type + ":" + output_file_dir + ":" + "/index");
+
+        //  Use the below rgx pattern to name the file
         std::vector<std::string> aug_output_replace_arg;
         aug_output_replace_arg.push_back(dir_output_match_rgx);
         aug_output_replace_arg.push_back(dir_output_replace_rgx);
@@ -651,7 +765,7 @@ int main(int argc, char *argv[])
 
     // TRANSFORM_NO_MP(A, tensor_search_udf, B, t, std::vector<float>);
 
-    static_cast<FT::Array<float> *>(A)->TransformNoMP<std::vector<float>>(tensor_search_udf, B);
+    static_cast<FT::Array<float> *>(A)->TransformNoMP<std::vector<SimilarityStruct>>(tensor_search_udf, B);
 
     A->ReportCost();
 
@@ -693,9 +807,11 @@ void printf_help(char *cmd)
       	  -h help (--help)\n\
           -d string, [directory/file name]:[dataset name] of the database to search.\n\
           -q string, [directory/file name]:[dataset name]of query/pattern to search with.\n\
-          -r string, [directory/file name]:[dataset name] to store result.\n\
+          -o string, [directory/file name] to store result. By default similary will be stored in /similarity with /index. \n\
           -m string, measurement of distance, dotproduct(default), euclidean, cosine, jaccard, angular,  \n\
           -s integer, enable shift with size on database (large tensor) to search, -1 means to shift by the size of pattern \n\
+          -k integer, the top k similarity,  result file will be used with [index] dataset to record top-k  \n\
+          -r integer, the r-th dimension for the similarity \n\
           Example: mpirun -n 1 %s -d db-data-2d:/testg/testd  -q db-pattern-2d:/testg/testd -r db-data-pattern-2d:/testg/testd\n";
 
     fprintf(stdout, msg, cmd, cmd);

@@ -1,3 +1,143 @@
+struct SimilarityStruct
+{
+    AU_UDT_INIT(SimilarityStruct)
+    float similarity;
+    unsigned long long index;
+};
+
+void PrintSSV(const std::string &note, const std::vector<SimilarityStruct> &ssv)
+{
+    std::cout << "Index : Similarity of " << note << " at " << ft_rank << "\n";
+    for (int i = 0; i < ssv.size(); i++)
+    {
+        std::cout << ssv[i].index << ": " << ssv[i].similarity << "\n";
+    }
+}
+
+bool compareSimilarity(const SimilarityStruct &a, const SimilarityStruct &b)
+{
+    return a.similarity > b.similarity;
+}
+
+std::vector<SimilarityStruct> FindTopKAfterCollect(const std::vector<SimilarityStruct> &v, int k, int n_patterns)
+{
+    std::vector<SimilarityStruct> result_final;
+
+    result_final.reserve(n_patterns * k);
+    // Ensure k is not greater than the size of the input vector
+    k = std::min(k, static_cast<int>(v.size()));
+
+    for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+    {
+        std::vector<SimilarityStruct> result;
+        // Iterate over segments
+        for (int i = pattern_index * k; i <= v.size() - k; i += (n_patterns * k))
+        {
+            result.insert(result.end(), v.begin() + i, v.begin() + i + k);
+        }
+
+        // Sort the result vector in descending order to get the overall top k elements
+        std::sort(result.begin(), result.end(), compareSimilarity);
+        // PrintSSV("template " + std::to_string(pattern_index), result);
+        if (result.size() > k)
+        {
+            result.resize(k);
+        }
+
+        // Resize the result vector to contain only the top k elements
+        // result.resize(k);
+        result_final.insert(result_final.end(), result.begin(), result.end());
+        // PrintSSV("template " + std::to_string(pattern_index), result_final);
+    }
+    return result_final;
+}
+
+std::vector<SimilarityStruct> CollectSimilarityStructToRoot(const std::vector<SimilarityStruct> &v)
+{
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    int num_elements_per_rank = v.size();
+    int root = 0;
+
+    // Determine the total number of elements
+    int total_elements = size * num_elements_per_rank;
+
+    // Allocate memory for the receive buffer on the root process
+    std::vector<SimilarityStruct> gathered_data(total_elements);
+
+    // Perform the gather operation
+    MPI_Gather(v.data(), num_elements_per_rank * sizeof(SimilarityStruct), MPI_BYTE,
+               gathered_data.data(), num_elements_per_rank * sizeof(SimilarityStruct), MPI_BYTE,
+               root, MPI_COMM_WORLD);
+
+    if (rank == root)
+    {
+        return gathered_data;
+    }
+    else
+    {
+        return {}; // Non-root processes return an empty vector
+    }
+}
+
+// Function to extract the top K largest elements and their indices
+std::vector<SimilarityStruct> top_k_largest(const std::vector<float> &v, size_t k, unsigned long long my_index_start)
+{
+    // Ensure the input vector is not empty
+    if (v.empty() || k == 0)
+    {
+        std::cerr << "Invalid input parameters." << std::endl;
+        return {};
+    }
+
+    // Create a vector of SimilarityStruct to store values along with their indices
+    std::vector<SimilarityStruct> similarityStructs;
+    for (unsigned long long i = 0; i < v.size(); ++i)
+    {
+        similarityStructs.push_back({v[i], my_index_start + i});
+    }
+
+    // Sort the vector of SimilarityStruct in descending order based on similarity
+    std::sort(similarityStructs.begin(), similarityStructs.end(),
+              [](const SimilarityStruct &a, const SimilarityStruct &b)
+              {
+                  return a.similarity > b.similarity;
+              });
+
+    // Resize the result vector to hold the top K elements
+    std::vector<SimilarityStruct> topKElements(k);
+
+    // Copy the top K elements
+    std::copy(similarityStructs.begin(), similarityStructs.begin() + k, topKElements.begin());
+
+    return topKElements;
+}
+
+// Function to insert a new element into the top-k vector
+void insert_topk(std::vector<SimilarityStruct> &v, const float similarity, const unsigned long long index)
+{
+    // Find the smallest similarity in the current top-k vector
+    float smallestSimilarity = v.back().similarity;
+
+    // If the new similarity is greater than the smallest, insert the new element
+    if (similarity > smallestSimilarity)
+    {
+        // Find the position to insert the new element while maintaining sorted order
+        auto it = std::lower_bound(v.begin(), v.end(), similarity,
+                                   [](const SimilarityStruct &s1, float value)
+                                   {
+                                       return s1.similarity > value;
+                                   });
+
+        // Insert the new element at the found position
+        v.insert(it, {similarity, index});
+
+        // Remove the last element to keep the vector size as top_k
+        v.pop_back();
+    }
+}
 
 template <class T>
 std::vector<std::vector<T>> Reshape2DVector(const std::vector<std::vector<T>> &nums, int m, int n)
@@ -82,7 +222,7 @@ inline void transpose(T *src, T *dst, const int N, const int M)
 }
 
 template <class T>
-inline std::vector<T> ConvertVector2DTo1D(std::vector<std::vector<T>> &data2d)
+inline std::vector<T> ConvertVector2DTo1D(const std::vector<std::vector<T>> &data2d)
 {
     std::vector<T> result;
     size_t rows = data2d.size();
@@ -95,6 +235,45 @@ inline std::vector<T> ConvertVector2DTo1D(std::vector<std::vector<T>> &data2d)
     }
     assert(result.size() == (rows * cols));
     return result;
+}
+
+template <class T1>
+inline std::vector<SimilarityStruct> ConvertVector2DTo1DTopK(const std::vector<std::vector<T1>> &data2d, const size_t top_k, unsigned long long my_index_start)
+{
+    if (top_k == 0)
+    {
+        std::vector<SimilarityStruct> result;
+        size_t rows = data2d.size();
+        size_t cols = data2d[0].size();
+
+        result.reserve(rows * cols);
+        for (std::size_t i = 0; i < rows; ++i)
+        {
+            for (std::size_t j = 0; j < cols; ++j)
+            {
+                result.push_back({static_cast<float>(data2d[i][j]), j + my_index_start});
+            }
+
+            // copy(data2d[i].begin(), data2d[i].end(), back_inserter(result));
+        }
+        assert(result.size() == (rows * cols));
+        return result;
+    }
+    else
+    {
+
+        std::vector<SimilarityStruct> result;
+        size_t rows = data2d.size();
+        result.reserve(rows * top_k);
+        std::vector<SimilarityStruct> result_topk_per_row;
+        for (std::size_t i = 0; i < rows; ++i)
+        {
+            result_topk_per_row = top_k_largest(data2d[i], top_k, my_index_start);
+            copy(result_topk_per_row.begin(), result_topk_per_row.end(), back_inserter(result));
+        }
+        assert(result.size() == (rows * top_k));
+        return result;
+    }
 }
 
 #include <vector>

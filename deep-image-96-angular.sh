@@ -14,4 +14,4 @@ else
 fi
 
 
-export HDF5_USE_FILE_LOCKING=FALSE;$run_command -n 2 ./tensor-search -d ./compare/deep-image-96-angular.hdf5:/train  -q ./compare/deep-image-96-angular.hdf5:/test -r ./compare/deep-image-96-angular-ts-result.hdf5:/similarity -k 1  -s -1 -p 0
+export HDF5_USE_FILE_LOCKING=FALSE;$run_command -n 2 ./tensor-search -d ./compare/deep-image-96-angular.hdf5:/train  -q ./compare/deep-image-96-angular.hdf5:/test -o ./compare/deep-image-96-angular-ts-result.hdf5 -r 1  -s -1 -p 0 
