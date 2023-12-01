@@ -561,6 +561,9 @@ void load_process_pattern_files_on_each_process()
 int main(int argc, char *argv[])
 {
 
+    // Init the MPICH, etc.
+    AU_Init(argc, argv);
+
     int copt;
     while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:h")) != -1)
         switch (copt)
@@ -622,9 +625,6 @@ int main(int argc, char *argv[])
             exit(-1);
             break;
         }
-
-    // Init the MPICH, etc.
-    AU_Init(argc, argv);
 
     if (isFile(extractDirFileName(db_data_dir)))
     {
