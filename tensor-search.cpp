@@ -147,10 +147,10 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
-                if ((pattern_index % 100 == 0) && (ft_rank == 0))
-                    std::cout << "pattern_index = " << pattern_index << "\n"
-                              << std::endl
-                              << std::flush;
+                // if ((pattern_index % 100 == 0) && (ft_rank == 0))
+                //     std::cout << "pattern_index = " << pattern_index << "\n"
+                //               << std::endl
+                //               << std::flush;
 // data_start_offset = 0;
 #if defined(_OPENMP)
 #pragma omp parallel for
