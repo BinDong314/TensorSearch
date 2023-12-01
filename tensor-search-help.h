@@ -99,13 +99,19 @@ std::vector<SimilarityStruct> top_k_largest(const std::vector<float> &v, size_t 
         similarityStructs.push_back({v[i], my_index_start + i});
     }
 
-    // Sort the vector of SimilarityStruct in descending order based on similarity
-    std::sort(similarityStructs.begin(), similarityStructs.end(),
-              [](const SimilarityStruct &a, const SimilarityStruct &b)
-              {
-                  return a.similarity > b.similarity;
-              });
+    // // Sort the vector of SimilarityStruct in descending order based on similarity
+    // std::sort(similarityStructs.begin(), similarityStructs.end(),
+    //           [](const SimilarityStruct &a, const SimilarityStruct &b)
+    //           {
+    //               return a.similarity > b.similarity;
+    //           });
 
+    // Use partial_sort to get the top K elements
+    std::partial_sort(similarityStructs.begin(), similarityStructs.begin() + k, similarityStructs.end(),
+                      [](const SimilarityStruct &a, const SimilarityStruct &b)
+                      {
+                          return a.similarity > b.similarity;
+                      });
     // Resize the result vector to hold the top K elements
     std::vector<SimilarityStruct> topKElements(k);
 
@@ -312,7 +318,22 @@ float inline similarity_fun(const std::vector<float> &v1, const std::vector<floa
     float result = 0.0;
     if (distance_type == "dotproduct")
     {
-        for (size_t i = 0; i < v1_count; ++i)
+        // for (size_t i = 0; i < v1_count; ++i)
+        // {
+        //     result += v1[v1_start + i] * v2[i];
+        // }
+
+        size_t i;
+        for (i = 0; i < v1_count && i + 3 < v1_count; i += 4)
+        {
+            result += v1[v1_start + i] * v2[i] +
+                      v1[v1_start + i + 1] * v2[i + 1] +
+                      v1[v1_start + i + 2] * v2[i + 2] +
+                      v1[v1_start + i + 3] * v2[i + 3];
+        }
+
+        // Handle remaining elements
+        for (; i < v1_count; ++i)
         {
             result += v1[v1_start + i] * v2[i];
         }
