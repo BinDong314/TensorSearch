@@ -59,8 +59,13 @@ template <class T>
 void calculate_similarity(const std::vector<T> &data, const std::vector<int> &data_size, const std::vector<std::vector<T>> &pattern_data, const std::vector<int> &each_pattern_data_size, const int n_patterns, std::vector<std::vector<float>> &similarity_result)
 {
     /// similarity_result.resize(n_patterns);
-
-    similarity_result.resize(n_patterns, std::vector<float>(1, 0.0));
+    // similarity_result.resize(n_patterns, std::vector<float>(1, 0.0));
+    similarity_result.resize(n_patterns);
+    for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+    {
+        similarity_result[pattern_index].resize(1, 0.0);
+    }
+    // std::cout << "similarity_result.size() = " << similarity_result.size() << ", similarity_result[0].size() = " << similarity_result[0].size() << "\n";
 
     // now we assume data_size == pattern_data_size
     int final_similarity_rank;
@@ -89,6 +94,9 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
     {
         std::cout << "Start to calculate_similarity " << std::endl
                   << std::flush;
+        PrintVector("data_size = ", data_size);
+        PrintVector("pattern_size = ", each_pattern_data_size);
+        std::cout << "n_patterns = " << n_patterns << std::endl;
     }
 
     if (final_similarity_rank == 1)
@@ -205,6 +213,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 
                 std::vector<float> similarity_result_temp;
                 similarity_result_temp.resize(cols, 0);
+
                 for (size_t shift_index = 0; shift_index < rows; shift_index++)
                 {
                     for (size_t i = 0; i < cols; i++)
@@ -221,32 +230,75 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
     }
     else if (final_similarity_rank == 3)
     {
-        int pattern_index = 0;
-        std::vector<std::vector<std::vector<float>>> data_3d = ConvertVector1DTo3D(data, data_size[0], data_size[1], data_size[2], false);
-        std::vector<std::vector<std::vector<float>>> pattern_data_3d = ConvertVector1DTo3D(pattern_data[pattern_index], each_pattern_data_size[0], each_pattern_data_size[1], each_pattern_data_size[2], false);
-        std::vector<float> similarity_result_temp, similarity_result_temp2;
-        size_t rows = data_size[0], cols = data_size[1], deps = data_size[2];
-        similarity_result_temp.resize(cols, 0);
-        similarity_result_temp2.resize(deps, 0);
+        std::vector<std::vector<std::vector<float>>> data_3d = ConvertVector1DTo3D(data, data_size[0], data_size[1], data_size[2], true);
 
-        for (size_t j = 0; j < deps; j++)
+        std::vector<float> similarity_result_by_cols, similarity_result_by_rows;
+        // size_t rows = data_size[0], cols = data_size[1], deps = data_size[2];
+        size_t rows = each_pattern_data_size[0], cols = each_pattern_data_size[1], deps = each_pattern_data_size[2];
+        similarity_result_by_cols.resize(cols, 0);
+        similarity_result_by_rows.resize(rows, 0);
+
+        std::cout << "data_3d's size = " << data_3d.size() << ", " << data_3d[0].size() << ", " << data_3d[0][0].size() << std::endl;
+        // td::cout << "pattern_3d's size = " << pattern_data_3d.size() << ", " << pattern_data_3d[0].size() << ", " << pattern_data_3d[0][0].size() << std::endl;
+
+        size_t final_shift_size;
+        if (shift_size == -1)
         {
-            for (size_t i = 0; i < cols; i++)
-            {
-                // normalize_vector(data_3d[j][i]);
-                // normalize_vector(pattern_data_3d[j][i]);
-                similarity_result_temp[i] = similarity_fun(data_3d[j][i], pattern_data_3d[j][i], distance_type);
-            }
-            similarity_result_temp2[j] = average_vector(similarity_result_temp);
+            final_shift_size = pattern_data[0].size();
         }
-        similarity_result[pattern_index][0] = average_vector(similarity_result_temp2);
+        else
+        {
+            final_shift_size = shift_size;
+        }
+        size_t data_n_rows = data_size[0] - rows;
+        // int n_pairs_of_vector = data_n_rows;
+
+        if (!ft_rank)
+        {
+            std::cout << "data.size() = " << data.size() << std::endl
+                      << std::flush;
+            std::cout << "data_n_rows = " << data_n_rows << std::endl
+                      << std::flush;
+            std::cout << "final_shift_size = " << final_shift_size << std::endl
+                      << std::flush;
+        }
+
+        // std::cout << "n_pairs_of_vector = " << data_n_rows << "\n";
+        // std::size_t data_start_offset = 0;
+        for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+        {
+            similarity_result[pattern_index].clear();
+        }
+        similarity_result.clear();
+        similarity_result.resize(n_patterns, std::vector<float>(data_n_rows, 0.0));
+        // std::cout << "similarity_result.size() = " << similarity_result.size() << "similarity_result[0].size() = " << similarity_result[0].size() << "\n";
+        for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+        {
+            std::vector<std::vector<std::vector<float>>> pattern_data_3d = ConvertVector1DTo3D(pattern_data[pattern_index], each_pattern_data_size[0], each_pattern_data_size[1], each_pattern_data_size[2], true);
+
+            for (size_t shift_index = 0; shift_index < data_n_rows; shift_index++)
+            {
+                for (size_t i = 0; i < rows; i++)
+                {
+                    for (size_t j = 0; j < cols; j++)
+                    {
+                        // normalize_vector(data_3d[j][i]);
+                        // normalize_vector(pattern_data_3d[j][i]);
+                        similarity_result_by_cols[j] = similarity_fun(data_3d[shift_index + i][j], pattern_data_3d[i][j], distance_type);
+                    }
+                    similarity_result_by_rows[i] = average_vector(similarity_result_by_cols);
+                }
+                similarity_result[pattern_index][shift_index] = average_vector(similarity_result_by_rows);
+
+                std::cout << "similarity_result [" << shift_index << "] = " << similarity_result[pattern_index][shift_index] << std::endl;
+            }
+        }
     }
     else
     {
         AU_EXIT("We haven't implement this 4D and beyond yet");
     }
     // similarity_result[pattern_index] = similarity_result_of_each_pattern;
-
     // return similarity_result;
 }
 
