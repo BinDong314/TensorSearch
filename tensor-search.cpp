@@ -49,7 +49,7 @@ int shift_size = 1;
 bool is_partition_single_file = false;
 int rank_to_partition = 0; // The rank of the data to partition
 size_t top_k = 0;
-
+bool is_transport_flag = false;
 // Put all into config file end
 
 void all_gather_vector(const std::vector<float> &v_to_send, std::vector<float> &v_to_receive);
@@ -97,6 +97,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
         PrintVector("data_size = ", data_size);
         PrintVector("pattern_size = ", each_pattern_data_size);
         std::cout << "n_patterns = " << n_patterns << std::endl;
+        std::cout << "final_similarity_rank = " << final_similarity_rank << std::endl;
     }
 
     if (final_similarity_rank == 1)
@@ -174,17 +175,17 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
     }
     else if (final_similarity_rank == 2)
     {
-        size_t rows = data_size[0], cols = data_size[1];
-        std::vector<std::vector<float>> data_2d = ConvertVector1DTo2D(data, rows, cols, false);
+        size_t rows = each_pattern_data_size[0], cols = each_pattern_data_size[1];
 
         if (!is_shift)
         {
+            std::vector<std::vector<float>> data_2d = ConvertVector1DTo2D(data, rows, cols, false);
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
                 std::vector<std::vector<float>> pattern_data_2d = ConvertVector1DTo2D(pattern_data[pattern_index], rows, cols, false);
-                PrintVector("data = ", data);
+                // PrintVector("data = ", data);
                 PrintVV("data_2d =", data_2d);
-                PrintVector("pattern_data = ", pattern_data);
+                // PrintVector("pattern_data = ", pattern_data);
                 PrintVV("pattern_data_2d =", pattern_data_2d);
 
                 std::vector<float> similarity_result_temp;
@@ -196,35 +197,74 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
                     // normalize_vector(pattern_data_2d[i]);
                     similarity_result_temp[i] = similarity_fun(data_2d[i], pattern_data_2d[i], distance_type);
                 }
-                PrintVector("similarity_result_temp = ", similarity_result_temp);
+                // PrintVector("similarity_result_temp = ", similarity_result_temp);
 
                 similarity_result[pattern_index][0] = average_vector(similarity_result_temp);
             }
         }
         else
         {
+
+            std::vector<std::vector<float>> data_2d = ConvertVector1DTo2D(data, data_size[0], data_size[1], true);
+
+            if (ft_rank == 0 || ft_rank == (ft_size - 1))
+            {
+                std::cout << "Start to calculate_similarity 1D with shift " << std::endl
+                          << std::flush;
+            }
+            size_t final_shift_size;
+            if (shift_size == -1)
+            {
+                final_shift_size = pattern_data[0].size();
+            }
+            else
+            {
+                final_shift_size = shift_size;
+            }
+            size_t data_n_cols = data_size[1] - cols;
+            // int n_pairs_of_vector = data_n_rows;
+
+            if (!ft_rank)
+            {
+                std::cout << "data.size() = " << data.size() << std::endl
+                          << std::flush;
+                std::cout << "data_n_cols = " << data_n_cols << std::endl
+                          << std::flush;
+                std::cout << "final_shift_size = " << final_shift_size << std::endl
+                          << std::flush;
+            }
+
+            // std::cout << "n_pairs_of_vector = " << data_n_cols << "\n";
+            // std::size_t data_start_offset = 0;
             for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
             {
-                std::vector<std::vector<float>> pattern_data_2d = ConvertVector1DTo2D(pattern_data[pattern_index], rows, cols, false);
-                PrintVector("data = ", data);
-                PrintVV("data_2d =", data_2d);
-                PrintVector("pattern_data = ", pattern_data);
-                PrintVV("pattern_data_2d =", pattern_data_2d);
+                similarity_result[pattern_index].clear();
+            }
+            similarity_result.clear();
+            similarity_result.resize(n_patterns, std::vector<float>(data_n_cols, 0.0));
+
+            for (int pattern_index = 0; pattern_index < n_patterns; pattern_index++)
+            {
+                std::vector<std::vector<float>> pattern_data_2d = ConvertVector1DTo2D(pattern_data[pattern_index], rows, cols, true);
+                // PrintVector("data = ", data);
+                // PrintVV("data_2d =", data_2d);
+                // PrintVector("pattern_data = ", pattern_data);
+                // PrintVV("pattern_data_2d =", pattern_data_2d);
 
                 std::vector<float> similarity_result_temp;
-                similarity_result_temp.resize(cols, 0);
+                similarity_result_temp.resize(rows, 0);
 
-                for (size_t shift_index = 0; shift_index < rows; shift_index++)
+                for (size_t shift_index = 0; shift_index < data_n_cols; shift_index++)
                 {
-                    for (size_t i = 0; i < cols; i++)
+                    for (size_t i = 0; i < rows; i++)
                     {
                         // normalize_vector(data_2d[i]);
                         // normalize_vector(pattern_data_2d[i]);
-                        similarity_result_temp[i] = similarity_fun(data_2d[i], pattern_data_2d[i], distance_type);
+                        similarity_result_temp[i] = similarity_fun(data_2d[i], pattern_data_2d[i], distance_type, shift_index * final_shift_size, cols);
                     }
+                    similarity_result[pattern_index][shift_index] = average_vector(similarity_result_temp);
                 }
-                PrintVector("similarity_result_temp = ", similarity_result_temp);
-                similarity_result[pattern_index][0] = average_vector(similarity_result_temp);
+                // PrintVector("similarity_result_temp = ", similarity_result_temp);
             }
         }
     }
@@ -318,6 +358,17 @@ inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT
     if (ft_rank == 0 || ft_rank == (ft_size - 1))
         std::cout << "Get the data for UDF on rank " << ft_rank << std::endl;
 
+    // Todo: for other dimension
+    if (is_transport_flag && max_offset_upper.size() == 2)
+    {
+        std::vector<TT> db_data_per_udf_T;
+        db_data_per_udf_T.resize(db_data_per_udf.size());
+        transpose(db_data_per_udf.data(), db_data_per_udf_T.data(), max_offset_upper[0], max_offset_upper[1]);
+        db_data_per_udf = db_data_per_udf_T;
+        int temp = max_offset_upper[0];
+        max_offset_upper[0] = max_offset_upper[1];
+        max_offset_upper[1] = temp;
+    }
     // std::vector<std::vector<float>> ts2d;
     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
 
@@ -550,10 +601,24 @@ void load_process_pattern_files_on_each_process()
     for (int pattern_file_index = 0; pattern_file_index < n_patterns_to_go; pattern_file_index++)
     {
         pattern_arrays->ReadNextChunk(pattern_data_per_file);
+        if (is_transport_flag && each_pattern_size.size() == 2)
+        {
+            std::vector<float> pattern_data_per_file_T;
+            pattern_data_per_file_T.resize(pattern_data_per_file.size());
+            transpose(pattern_data_per_file.data(), pattern_data_per_file_T.data(), each_pattern_size[0], each_pattern_size[1]);
+            pattern_data_per_file = pattern_data_per_file_T;
+        }
 
         pattern_data[pattern_file_index] = pattern_data_per_file;
     }
     // std::cout << "Get the data for pattern" << std::endl;
+
+    if (is_transport_flag && each_pattern_size.size() == 2)
+    {
+        int temp = each_pattern_size[0];
+        each_pattern_size[0] = each_pattern_size[1];
+        each_pattern_size[1] = temp;
+    }
 
     if (ft_size > 1)
     {
@@ -617,7 +682,7 @@ int main(int argc, char *argv[])
     AU_Init(argc, argv);
 
     int copt;
-    while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:h")) != -1)
+    while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:th")) != -1)
         switch (copt)
         {
         case 'd':
@@ -663,6 +728,9 @@ int main(int argc, char *argv[])
             rank_to_partition = atoi(optarg);
             if (!ft_rank)
                 std::cout << "User wants Partition on the dimension [ " << rank_to_partition << " ]\n";
+            break;
+        case 't':
+            is_transport_flag = true;
             break;
         case 'h':
             if (!ft_rank)
@@ -862,6 +930,7 @@ void printf_help(char *cmd)
           -o string, [directory/file name] to store result. By default similary will be stored in /similarity with /index. \n\
           -m string, measurement of distance, dotproduct(default), euclidean, cosine, jaccard, angular,  \n\
           -s integer, enable shift with size on database (large tensor) to search, -1 means to shift by the size of pattern \n\
+          -t, enable transport of data from column-wise to row-wise (default input) \n\
           -k integer, the top k similarity,  result file will be used with [index] dataset to record top-k  \n\
           -r integer, the r-th dimension for the similarity \n\
           Example: mpirun -n 1 %s -d db-data-2d:/testg/testd  -q db-pattern-2d:/testg/testd -r db-data-pattern-2d:/testg/testd\n";
