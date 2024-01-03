@@ -24,6 +24,11 @@ using namespace FT;
 std::string pattern_dir = "/Users/dbin/work/TensorSearch/db-pattern-2d::/testg/testd";
 
 std::vector<std::vector<float>> pattern_data;
+
+bool has_weight = false;
+std::string weight_file_dir = "";
+std::vector<std::vector<float>> pattern_weight;
+
 // Put all into config file
 std::string A_endpoint_id;
 std::string db_data_file_type = "EP_HDF5";
@@ -226,6 +231,7 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
 
             if (!ft_rank)
             {
+                PrintVV("data_2d = ", data_2d);
                 std::cout << "data.size() = " << data.size() << std::endl
                           << std::flush;
                 std::cout << "data_n_cols = " << data_n_cols << std::endl
@@ -249,8 +255,10 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
                 // PrintVector("data = ", data);
                 // PrintVV("data_2d =", data_2d);
                 // PrintVector("pattern_data = ", pattern_data);
-                // PrintVV("pattern_data_2d =", pattern_data_2d);
-
+                if (!ft_rank)
+                {
+                    PrintVV("pattern_data_2d =", pattern_data_2d);
+                }
                 std::vector<float> similarity_result_temp;
                 similarity_result_temp.resize(rows, 0);
 
@@ -361,13 +369,17 @@ inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT
     // Todo: for other dimension
     if (is_transport_flag && max_offset_upper.size() == 2)
     {
+        PrintVector("db_data_per_udf (before T) = ", db_data_per_udf);
+
         std::vector<TT> db_data_per_udf_T;
         db_data_per_udf_T.resize(db_data_per_udf.size());
-        transpose(db_data_per_udf.data(), db_data_per_udf_T.data(), max_offset_upper[0], max_offset_upper[1]);
+        transpose(db_data_per_udf.data(), db_data_per_udf_T.data(), max_offset_upper[0] + 1, max_offset_upper[1] + 1);
         db_data_per_udf = db_data_per_udf_T;
         int temp = max_offset_upper[0];
         max_offset_upper[0] = max_offset_upper[1];
         max_offset_upper[1] = temp;
+
+        PrintVector("db_data_per_udf (after T) = ", db_data_per_udf);
     }
     // std::vector<std::vector<float>> ts2d;
     // ts2d = DasLib::Vector1D2D(chs_per_file_udf, db_data_per_udf);
@@ -502,7 +514,7 @@ inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT
 //     return oStencil;
 // }
 
-void load_process_pattern_files_on_each_process()
+void load_process_pattern_files_on_each_process(const std::string endpoint_info, std::vector<std::vector<float>> &output_data)
 {
     AU::Array<float> *pattern_arrays;
     std::vector<int> pattern_chunk_size, pattern_overlap_size = {0, 0};
@@ -682,7 +694,7 @@ int main(int argc, char *argv[])
     AU_Init(argc, argv);
 
     int copt;
-    while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:th")) != -1)
+    while ((copt = getopt(argc, argv, "d:q:o:m:s:k:p:r:tw:h")) != -1)
         switch (copt)
         {
         case 'd':
@@ -728,6 +740,12 @@ int main(int argc, char *argv[])
             rank_to_partition = atoi(optarg);
             if (!ft_rank)
                 std::cout << "User wants Partition on the dimension [ " << rank_to_partition << " ]\n";
+            break;
+        case 'w':
+            has_weight = true;
+            weight_file_dir.assign(optarg);
+            if (!ft_rank)
+                std::cout << "Weight file [ " << weight_file_dir << " ]\n";
             break;
         case 't':
             is_transport_flag = true;
