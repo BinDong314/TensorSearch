@@ -61,7 +61,7 @@ void all_gather_vector(const std::vector<float> &v_to_send, std::vector<float> &
 void printf_help(char *cmd);
 
 template <class T>
-void calculate_similarity(const std::vector<T> &data, const std::vector<int> &data_size, const std::vector<std::vector<T>> &pattern_data, const std::vector<int> &each_pattern_data_size, const int n_patterns, std::vector<std::vector<float>> &similarity_result)
+void calculate_similarity(const std::vector<T> &data, const std::vector<int> &data_size, const std::vector<std::vector<T>> &pattern_data, const std::vector<int> &each_pattern_data_size, const int n_patterns, std::vector<std::vector<float>> &similarity_result, const std::vector<std::vector<T>> &pattern_weight_data)
 {
     /// similarity_result.resize(n_patterns);
     // similarity_result.resize(n_patterns, std::vector<float>(1, 0.0));
@@ -270,7 +270,14 @@ void calculate_similarity(const std::vector<T> &data, const std::vector<int> &da
                         // normalize_vector(pattern_data_2d[i]);
                         similarity_result_temp[i] = similarity_fun(data_2d[i], pattern_data_2d[i], distance_type, shift_index * final_shift_size, cols);
                     }
-                    similarity_result[pattern_index][shift_index] = average_vector(similarity_result_temp);
+                    if (!has_weight)
+                    {
+                        similarity_result[pattern_index][shift_index] = average_vector(similarity_result_temp);
+                    }
+                    else
+                    {
+                        similarity_result[pattern_index][shift_index] = sum_vector_with_weight(similarity_result_temp, pattern_weight_data[pattern_index]);
+                    }
                 }
                 // PrintVector("similarity_result_temp = ", similarity_result_temp);
             }
@@ -399,7 +406,7 @@ inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT
     // }
 
     // calculate_similarity(std::vector<T1> &data, std::vector<int> &data_size, std::vector<std::vector<T2>> &pattern_data, std::vector<int> &each_pattern_data_size, int n_patterns, std::vector<std::vector<float>> &similarity_result)
-    calculate_similarity(db_data_per_udf, db_data_per_udf_size, pattern_data, each_pattern_size, n_patterns, similarity_vectors);
+    calculate_similarity(db_data_per_udf, db_data_per_udf_size, pattern_data, each_pattern_size, n_patterns, similarity_vectors, pattern_weight);
 
     // vector_shape[0] = n_patterns;
     // vector_shape[1] = similarity_vectors[0].size();
@@ -514,6 +521,12 @@ inline Stencil<std::vector<SimilarityStruct>> tensor_search_udf(const Stencil<TT
 //     return oStencil;
 // }
 
+/**
+ * @brief
+ *
+ * @param endpoint_info : pattern_dir
+ * @param output_data:
+ */
 void load_process_pattern_files_on_each_process(const std::string endpoint_info, std::vector<std::vector<float>> &output_data)
 {
     AU::Array<float> *pattern_arrays;
@@ -523,14 +536,14 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
     std::string pattern_endpoint_id;
     bool is_pattern_input_single_file = false;
 
-    if (isFile(extractDirFileName(pattern_dir)))
+    if (isFile(extractDirFileName(endpoint_info)))
     {
         is_pattern_input_single_file = true;
-        pattern_endpoint_id = db_data_file_type + ":" + pattern_dir;
+        pattern_endpoint_id = db_data_file_type + ":" + endpoint_info;
     }
     else
     {
-        pattern_endpoint_id = "EP_DIR:" + db_data_file_type + ":" + pattern_dir;
+        pattern_endpoint_id = "EP_DIR:" + db_data_file_type + ":" + endpoint_info;
     }
 
     pattern_arrays = new AU::Array<float>(pattern_endpoint_id);
@@ -607,7 +620,7 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
     if (!ft_rank)
         std::cout << "Rank " << ft_rank << "# of total pattern files = " << n_patterns << ", # of pattern files per process = " << n_patterns_to_go << std::endl;
 
-    pattern_data.resize(n_patterns_to_go);
+    output_data.resize(n_patterns_to_go);
 
     std::vector<float> pattern_data_per_file;
     for (int pattern_file_index = 0; pattern_file_index < n_patterns_to_go; pattern_file_index++)
@@ -621,7 +634,7 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
             pattern_data_per_file = pattern_data_per_file_T;
         }
 
-        pattern_data[pattern_file_index] = pattern_data_per_file;
+        output_data[pattern_file_index] = pattern_data_per_file;
     }
     // std::cout << "Get the data for pattern" << std::endl;
 
@@ -635,18 +648,18 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
     if (ft_size > 1)
     {
         int points_per_pattern, max_points_per_pattern;
-        if ((!pattern_data.empty()) && (!pattern_data[0].empty()))
+        if ((!output_data.empty()) && (!output_data[0].empty()))
         {
-            points_per_pattern = pattern_data[0].size();
+            points_per_pattern = output_data[0].size();
         }
 
         MPI_Allreduce(&points_per_pattern, &max_points_per_pattern, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
         // MPI_Allreduce(&timepoints, &max_timepoints, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-        std::vector<float> pattern_data_1D = ConvertVector2DTo1D(pattern_data);
+        std::vector<float> pattern_data_1D = ConvertVector2DTo1D(output_data);
         std::vector<float> pattern_data_1D_merged;
         all_gather_vector(pattern_data_1D, pattern_data_1D_merged);
-        pattern_data = ConvertVector1DTo2D(pattern_data_1D_merged, n_patterns, max_points_per_pattern, true);
+        output_data = ConvertVector1DTo2D(pattern_data_1D_merged, n_patterns, max_points_per_pattern, true);
 
         // std::cout << "n_patterns = " << n_patterns << std::endl;
         // std::cout << "max_points_per_pattern = " << max_points_per_pattern << std::endl;
@@ -661,7 +674,7 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
         {
             n_patterns = pattern_chunk_size[0];
             int max_points_per_pattern = pattern_chunk_size[1];
-            pattern_data = ConvertVector1DTo2D(pattern_data_per_file, n_patterns, max_points_per_pattern, true);
+            output_data = ConvertVector1DTo2D(pattern_data_per_file, n_patterns, max_points_per_pattern, true);
             each_pattern_size.resize(1);
             each_pattern_size[0] = pattern_chunk_size[1];
             // user_similarity_rank = data_rank;
@@ -676,12 +689,12 @@ void load_process_pattern_files_on_each_process(const std::string endpoint_info,
             n_patterns = pattern_chunk_size[0] * ft_size;
             int max_points_per_pattern = pattern_chunk_size[1];
             // ConcatenateVectors();
-            pattern_data = Reshape2DVector(pattern_data, n_patterns, max_points_per_pattern);
+            output_data = Reshape2DVector(output_data, n_patterns, max_points_per_pattern);
             if (!ft_rank)
             {
-                std::cout << "After Reshape2DVector: pattern_data.size() = " << pattern_data.size() << std::endl;
-                std::cout << "After Reshape2DVector: pattern_data[0].size() = " << pattern_data[0].size() << std::endl;
-                PrintVV("pattern_data=", pattern_data);
+                std::cout << "After Reshape2DVector: pattern_data.size() = " << output_data.size() << std::endl;
+                std::cout << "After Reshape2DVector: pattern_data[0].size() = " << output_data[0].size() << std::endl;
+                PrintVV("output_data=", output_data);
             }
         }
     }
@@ -899,7 +912,13 @@ int main(int argc, char *argv[])
     A->EnableApplyStride(chunk_size);
     A->SetVectorDirection(AU_FLAT_OUTPUT_ROW);
 
-    load_process_pattern_files_on_each_process();
+    load_process_pattern_files_on_each_process(pattern_dir, pattern_data);
+
+    if (has_weight)
+    {
+        load_process_pattern_files_on_each_process(weight_file_dir, pattern_weight);
+        PrintVV("pattern_weight = ", pattern_weight);
+    }
 
     // TRANSFORM_NO_MP(A, tensor_search_udf, B, t, std::vector<float>);
 

@@ -459,6 +459,24 @@ float average_vector(std::vector<float> &data)
     return sum / static_cast<float>(data.size());
 }
 
+float sum_vector_with_weight(const std::vector<float> &data, const std::vector<float> &weight)
+{
+    // Check if the vectors are empty or have different sizes to avoid issues.
+    if (data.empty() || data.size() != weight.size())
+    {
+        return 0.0; // You can choose an appropriate value for the case of invalid input.
+    }
+
+    float weightedSum = 0.0;
+
+    for (size_t i = 0; i < data.size(); ++i)
+    {
+        weightedSum += data[i] * weight[i];
+    }
+
+    return weightedSum;
+}
+
 std::string inline extractDirFileName(const std::string &inputString)
 {
     size_t colonPos = inputString.find(':');
