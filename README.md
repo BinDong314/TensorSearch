@@ -1,6 +1,7 @@
 # TensorSearch
 
-This repo contains the code developed by the below research paper.
+This repo contains the code developed for the below research paper.
+It needs further cleanup and debug work to make it better.
 Please drop Bin Dong (dbin@lbl.gov) a message if you need help with the usage of the code.
 
 ```
@@ -62,7 +63,7 @@ make
 ```shell
 ./data-generator.sh
 ```
-It produces datasets, including both a DB to search against and a pattern to search with. Now the datasets includes 1D, 2D, and 3D data. Take 2D data as example, it produces three directories and each has a few files. 
+It produces datasets, including both a DB to search against and a pattern to search with. Now the datasets includes 1D, 2D, and 3D data. Take 2D data as example, it produces three directories and each has a few files. Now there is no implementation beyond 3D dataset, but it can be easily added. 
 
 ```shell
 $ ls db-data-2d  # the DB to search against
